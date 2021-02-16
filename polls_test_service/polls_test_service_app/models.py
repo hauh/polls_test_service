@@ -3,7 +3,8 @@
 from enum import Enum
 from functools import partial
 
-from django.db.models import ForeignKey, Model
+from django.contrib.auth.models import AbstractUser, BaseUserManager
+from django.db.models import ForeignKey, Manager, Model
 from django.db.models.deletion import CASCADE
 from django.db.models.fields import (
 	CharField, DateTimeField, IntegerField, SmallIntegerField, TextField
@@ -57,3 +58,26 @@ class Answer(Model):
 	choice = answer_foreign_key(Choice, default=None, null=True)
 	question = answer_foreign_key(Question)
 	poll = answer_foreign_key(Poll)
+
+
+class UserManager(BaseUserManager):
+	"""For creating users with hashed password."""
+
+	def create_user(self, password, **fields):
+		if not password:
+			raise ValueError("Password required.")
+		user = self.model(**fields)
+		user.set_password(password)
+		user.save()
+		return user
+
+	def create_superuser(self, password, **fields):
+		user = self.create_user(password, **fields)
+		user.is_staff = True
+		user.is_superuser = True
+		user.save()
+		return user
+
+
+class User(AbstractUser):
+	objects = UserManager()

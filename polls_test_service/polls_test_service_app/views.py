@@ -1,9 +1,11 @@
 """Views."""
 
+from django.utils import timezone
 from rest_framework.generics import (
 	CreateAPIView, GenericAPIView, ListCreateAPIView,
 	RetrieveUpdateDestroyAPIView, get_object_or_404
 )
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from polls_test_service_app import models, serializers
@@ -12,8 +14,12 @@ from polls_test_service_app import models, serializers
 class PollsList(ListCreateAPIView):
 	"""GET, POST Polls."""
 
-	queryset = models.Poll.objects.all()
 	serializer_class = serializers.Poll
+
+	def get_queryset(self):
+		if self.request.user.is_staff:
+			return models.Poll.objects.all()
+		return models.Poll.objects.filter(end_date__lt=timezone.now())
 
 
 class Poll(RetrieveUpdateDestroyAPIView):
@@ -51,6 +57,7 @@ class Answer(CreateAPIView):
 
 	queryset = models.Answer.objects.all()
 	serializer_class = serializers.Answer
+	permission_classes = (AllowAny,)
 
 	def get_serializer_context(self):
 		context = super().get_serializer_context()

@@ -2,10 +2,12 @@
 
 from datetime import datetime, timedelta
 
+from django.contrib.auth import get_user_model
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework.status import (
 	HTTP_200_OK, HTTP_201_CREATED, HTTP_204_NO_CONTENT, HTTP_400_BAD_REQUEST,
-	HTTP_404_NOT_FOUND
+	HTTP_401_UNAUTHORIZED, HTTP_404_NOT_FOUND
 )
 from rest_framework.test import APITestCase
 
@@ -13,23 +15,20 @@ from rest_framework.test import APITestCase
 class BaseTest(APITestCase):
 	"""For making reqests."""
 
-	def request(self, method, url, expected_status_code, data=None):
-		response = getattr(self.client, method)(url, data, format='json')
-		self.assertEqual(response.status_code, expected_status_code, response.data)
-		return response.data
-
 	polls_url = reverse('polls-list')
-	new_poll_url = reverse('poll-detail', args=(1,))
+	new_poll_url = reverse('poll-details', args=(1,))
 	q_list_url = reverse('questions-list', args=(1,))
-	q_url = reverse('question-detail', args=(1, 1))
+	q_url = reverse('question-details', args=(1, 1))
 	answer_url = reverse('answer-create', args=(1,))
 	list_answers_url = reverse('answers-list', args=(1,))
+	auth_url = reverse('login')
 
+	cred = {'username': 'admin', 'password': '!@#$'}
 	poll = {
 		'title': "Test Poll",
 		'description': "Poll description.",
-		'start_date': datetime.now(),
-		'end_date': datetime.now()
+		'start_date': timezone.now(),
+		'end_date': timezone.now()
 	}
 	question = {
 		'text': "Test question",
@@ -41,9 +40,48 @@ class BaseTest(APITestCase):
 		]
 	}
 
+	def request(self, method, url, expected_status_code, data=None):
+		response = getattr(self.client, method)(url, data, format='json')
+		self.assertEqual(response.status_code, expected_status_code, response.data)
+		return response.data
+
+	def authorize(self):
+		get_user_model().objects.create_superuser(**self.cred)
+		data = self.request('post', self.auth_url, HTTP_200_OK, self.cred)
+		self.client.credentials(HTTP_AUTHORIZATION='Token ' + data['token'])
+
+
+class AuthTest(BaseTest):
+	"""Test authorization."""
+
+	def setUp(self):
+		get_user_model().objects.create_superuser(**self.cred)
+
+	def test_token(self):
+		data = self.request('post', self.auth_url, HTTP_200_OK, self.cred)
+		self.assertIn('token', data)
+
+	def test_unauthorized(self):
+		self.request('post', self.polls_url, HTTP_401_UNAUTHORIZED, self.poll)
+		self.request('get', self.polls_url, HTTP_200_OK, self.poll)
+		self.request('delete', self.new_poll_url, HTTP_401_UNAUTHORIZED)
+		self.request('get', self.polls_url, HTTP_200_OK, self.poll)
+		self.request('post', self.answer_url, HTTP_404_NOT_FOUND)
+
+	def test_authorized(self):
+		data = self.request('post', self.auth_url, HTTP_200_OK, self.cred)
+		self.client.credentials(HTTP_AUTHORIZATION='Token ' + data['token'])
+		self.request('post', self.polls_url, HTTP_201_CREATED, self.poll)
+		self.request('post', self.q_list_url, HTTP_201_CREATED, self.question)
+		self.request('delete', self.q_url, HTTP_204_NO_CONTENT)
+		self.request('delete', self.new_poll_url, HTTP_204_NO_CONTENT)
+
 
 class PollsTest(BaseTest):
 	"""Tests for Polls."""
+
+	def setUp(self):
+		self.authorize()
 
 	def test_create(self):
 		data = self.request('post', self.polls_url, HTTP_201_CREATED, self.poll)
@@ -53,7 +91,8 @@ class PollsTest(BaseTest):
 		self.assertListEqual(data.pop('questions'), [])
 		for date in ('start_date', 'end_date'):
 			self.assertIn(date, data)
-			data[date] = datetime.fromisoformat(data[date][:-1])
+			data[date] = datetime.fromisoformat(data[date][:-1])\
+				.replace(tzinfo=timezone.get_default_timezone())
 		self.assertDictEqual(self.poll, data)
 
 	def test_create_invalid(self):
@@ -64,10 +103,10 @@ class PollsTest(BaseTest):
 			('description', ""),
 			('start_date', None),
 			('start_date', ""),
-			('start_date', datetime.now() + timedelta(hours=1)),
+			('start_date', timezone.now() + timedelta(hours=1)),
 			('start_date', ""),
 			('end_date', None),
-			('end_date', datetime.now() - timedelta(hours=1)),
+			('end_date', timezone.now() - timedelta(hours=1)),
 		):
 			invalid_data = {**self.poll, field: invalid}
 			self.request('post', self.polls_url, HTTP_400_BAD_REQUEST, invalid_data)
@@ -120,6 +159,7 @@ class QuestionsTest(BaseTest):
 	"""Tests for Questions and Choices."""
 
 	def setUp(self):
+		self.authorize()
 		self.request('post', self.polls_url, HTTP_201_CREATED, self.poll)
 
 	def test_create(self):
@@ -180,6 +220,7 @@ class AnswersTest(BaseTest):
 	"""Tests for user's Answers."""
 
 	def setUp(self):
+		self.authorize()
 		self.answer = {
 			'user_id': 1,
 			'answers': [

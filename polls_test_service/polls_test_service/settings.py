@@ -39,6 +39,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
 
     'rest_framework',
+    'rest_framework.authtoken',
+
     'polls_test_service_app',
 ]
 
@@ -124,7 +126,15 @@ STATIC_URL = '/static/'
 
 
 REST_FRAMEWORK = {
-	'DEFAULT_PARSER_CLASSES': (
-		'rest_framework.parsers.JSONParser',
-	),
+    'DEFAULT_PARSER_CLASSES': (
+        'rest_framework.parsers.JSONParser',
+    ),
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework.authentication.TokenAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'polls_test_service_app.permissions.GetOrAdmin',
+    ),
 }
+
+AUTH_USER_MODEL = 'polls_test_service_app.User'
