@@ -100,24 +100,48 @@ class Answer(Serializer):
 	def validate_answers(self, value):
 		if not value:
 			raise ValidationError("Please, provide some answers.")
-		questions = {q.id: q for q in self.context['poll'].questions.all()}
+		poll = self.context['poll']
+		questions = {q.id: q for q in poll.questions.all()}
 		valid_answers = []
+		found_answers = set()
 		for raw_answer in value:
-			if not (question := questions.pop(raw_answer.get('question_id'), None)):
+			if not (question := questions.get(raw_answer.get('question_id'), None)):
 				continue
-			question_type = QType(question.q_type)
+
 			choice = raw_answer.get('choice')
+			question_type = QType(question.q_type)
+
 			if question_type == QType.ARBITRARY:
 				if not isinstance(choice, str):
 					raise ValidationError(
-						"Answer to question of this type must be a string.")
-			elif not isinstance(choice, int):
+						"Answer to question of this type must be a string."
+					)
+				valid_answers.append(raw_answer)
+				continue
+
+			if not isinstance(choice, int):
 				raise ValidationError(
-					"Answer to question of this type must be an integer id of a choice.")
+					f"Answer to question id {question.id} must be an integer id of a choice."
+				)
+
+			if question_type == QType.SINGLE and choice in found_answers:
+				raise ValidationError(
+					f"Only single choice allowed for question id {question.id}"
+				)
+			found_answers.add(choice)
+
+			try:
+				existing_choice = models.Choice.objects.get(id=choice)
+			except models.Choice.DoesNotExist as e:
+				raise ValidationError(f"Choice id {choice} not found.") from e
+			if existing_choice.question != question:
+				raise ValidationError(f"Choice id {choice} is for anoher question.")
 			valid_answers.append(raw_answer)
-		if questions:
+
+		if len(found_answers) != len(questions):
 			raise ValidationError(
-				f"Please, provide answers to questions: {list(questions)}.")
+				f"Please, provide answers to questions: {list(questions)}."
+			)
 		return valid_answers
 
 	def create(self, validated_data):

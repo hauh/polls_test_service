@@ -13,7 +13,7 @@ urlpatterns = router.urls + [
 		path('', PollsList.as_view(), name='polls-list'),
 		path('<pk>/', Poll.as_view(), name='poll-detail'),
 		path('<int:poll_id>/', include([
-			path('answer/', Answer.as_view(), name='questions-list'),
+			path('answer/', Answer.as_view(), name='answer-create'),
 			path('questions/', QuestionsList.as_view(), name='questions-list'),
 			path('questions/<pk>/', Question.as_view(), name='question-detail'),
 		]))
