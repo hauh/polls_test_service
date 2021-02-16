@@ -104,17 +104,17 @@ class PollsTest(BaseTest):
 
 
 class QuestionsTest(BaseTest):
-	"""Tests for Questions and Answers."""
+	"""Tests for Questions and Choices."""
 
 	q_list_url = reverse('questions-list', args=(1,))
 	q_url = reverse('question-detail', args=(1, 1))
 	question = {
 		'text': "Test question",
 		'q_type': 1,
-		'answers': [
-			{'text': "Answer 1"},
-			{'text': "Answer 2"},
-			{'text': "Answer 3"},
+		'choices': [
+			{'text': "Choice 1"},
+			{'text': "Choice 2"},
+			{'text': "Choice 3"},
 		]
 	}
 
@@ -125,13 +125,13 @@ class QuestionsTest(BaseTest):
 		data = self.request('post', self.q_list_url, HTTP_201_CREATED, self.question)
 		self.assertIn('id', data)
 		self.assertIn('q_type', data)
-		self.assertIn('answers', data)
+		self.assertIn('choices', data)
 		polls = self.request('get', self.polls_url, HTTP_200_OK)
 		self.assertDictEqual(polls[0]['questions'][0], data)
 
-		no_answers_q = {**self.question, 'q_type': 0}
-		data = self.request('post', self.q_list_url, HTTP_201_CREATED, no_answers_q)
-		self.assertListEqual(data['answers'], [])
+		no_choices_q = {**self.question, 'q_type': 0}
+		data = self.request('post', self.q_list_url, HTTP_201_CREATED, no_choices_q)
+		self.assertListEqual(data['choices'], [])
 		polls = self.request('get', self.polls_url, HTTP_200_OK)
 		self.assertDictEqual(polls[0]['questions'][1], data)
 
@@ -142,13 +142,13 @@ class QuestionsTest(BaseTest):
 			('q_type', 111),
 			('q_type', "err"),
 			('q_type', None),
-			('answers', None),
-			('answers', "err"),
-			('answers', []),
-			('answers', ["err"]),
-			('answers', [{'not_text': "Text"}]),
-			('answers', [{'text': None}]),
-			('answers', [{'text': ""}]),
+			('choices', None),
+			('choices', "err"),
+			('choices', []),
+			('choices', ["err"]),
+			('choices', [{'not_text': "Text"}]),
+			('choices', [{'text': None}]),
+			('choices', [{'text': ""}]),
 		):
 			invalid_data = {**self.question, field: invalid}
 			self.request('post', self.q_list_url, HTTP_400_BAD_REQUEST, invalid_data)
@@ -158,9 +158,9 @@ class QuestionsTest(BaseTest):
 		for field, new in (
 			('text', "New question text"),
 			('q_type', 2),
-			('answers', []),
-			('answers', [{'text': "New answer 1"}]),
-			('answers', [{'text': "New answer 2"}, {'text': "New answer 3"}]),
+			('choices', []),
+			('choices', [{'text': "New choice 1"}]),
+			('choices', [{'text': "New choice 2"}, {'text': "New choice 3"}]),
 		):
 			question = self.request('patch', self.q_url, HTTP_200_OK, {field: new})
 			polls = self.request('get', self.polls_url, HTTP_200_OK)

@@ -1,8 +1,10 @@
 """Views."""
 
 from rest_framework.generics import (
-	ListCreateAPIView, RetrieveUpdateDestroyAPIView
+	CreateAPIView, ListCreateAPIView, RetrieveUpdateDestroyAPIView,
+	get_object_or_404
 )
+
 from polls_test_service_app import models, serializers
 
 
@@ -23,20 +25,29 @@ class Poll(RetrieveUpdateDestroyAPIView):
 class QuestionsList(ListCreateAPIView):
 	"""GET, POST Questions."""
 
+	queryset = models.Question.objects.all()
 	serializer_class = serializers.Question
 
-	def get_queryset(self):
-		return models.Question.objects.filter(poll=self.kwargs['poll_id'])
-
-	def perform_create(self, serializer):
-		serializer.validated_data['poll_id'] = self.kwargs['poll_id']
-		serializer.save()
+	def get_serializer_context(self):
+		context = super().get_serializer_context()
+		context['poll'] = get_object_or_404(models.Poll, id=self.kwargs['poll_id'])
+		return context
 
 
 class Question(RetrieveUpdateDestroyAPIView):
 	"""GET, PUT, PATCH, DELETE Question."""
 
+	queryset = models.Question.objects.all()
 	serializer_class = serializers.Question
 
-	def get_queryset(self):
-		return models.Question.objects.filter(poll=self.kwargs['poll_id'])
+
+class Answer(CreateAPIView):
+	"""POST Answer to Poll."""
+
+	queryset = models.Answer.objects.all()
+	serializer_class = serializers.Answer
+
+	def get_serializer_context(self):
+		context = super().get_serializer_context()
+		context['poll'] = get_object_or_404(models.Poll, id=self.kwargs['poll_id'])
+		return context

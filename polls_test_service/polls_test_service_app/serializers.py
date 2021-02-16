@@ -1,55 +1,65 @@
 """Serializers."""
 
-from rest_framework.serializers import ModelSerializer, ValidationError
+from functools import partial
+
+from django.db import transaction
+from rest_framework.fields import IntegerField, JSONField
+from rest_framework.serializers import (
+	ListSerializer, ModelSerializer, Serializer, ValidationError
+)
+
 from polls_test_service_app import models
+from polls_test_service_app.models import QuestionType as QType
 
-NO_ANSWERS_TYPE = models.QuestionType.ARBITRARY.value
 
-
-class Answer(ModelSerializer):
-	"""Answer serializer."""
+class Choice(ModelSerializer):
+	"""Question Choice serializer."""
 
 	class Meta:
-		model = models.Answer
-		fields = ('id', 'text')
+		model = models.Choice
+		fields = 'id', 'text'
 
 
 class Question(ModelSerializer):
-	"""Question serializer."""
+	"""Poll Question serializer."""
 
-	answers = Answer(many=True, required=False)
+	choices = Choice(many=True, required=False)
 
 	class Meta:
 		model = models.Question
-		fields = ('id', 'text', 'q_type', 'answers')
+		fields = 'id', 'text', 'q_type', 'choices'
 
 	def validate_q_type(self, value):
-		question_types = models.QuestionType.choices()
-		if value not in question_types:
-			raise ValidationError(f"Value must be in {question_types}.")
-		if value != NO_ANSWERS_TYPE and not self.initial_data.get('answers'):
-			if not self.instance or not self.instance.answers:
-				raise ValidationError("Answers are required for this question type.")
+		try:
+			q_type = QType(value)
+		except ValueError as e:
+			raise ValidationError(f"Value must be in {QType.choices()}.") from e
+		if q_type is not QType.ARBITRARY and not self.initial_data.get('choices'):
+			if not self.instance or not self.instance.choices:
+				raise ValidationError("Choices are required for this question type.")
 		return value
 
 	def create(self, validated_data):
-		answers = validated_data.pop('answers', ())
-		question = super().create(validated_data)
-		self._update_answers(question, answers)
+		choices = validated_data.pop('choices', ())
+		validated_data['poll'] = self.context['poll']
+		with transaction.atomic():
+			question = super().create(validated_data)
+			self._update_choices(question, choices)
 		return question
 
 	def update(self, instance, validated_data):
-		answers = validated_data.pop('answers', ())
-		question = super().update(instance, validated_data)
-		if answers or validated_data.get('q_type') == NO_ANSWERS_TYPE:
-			models.Answer.objects.filter(question=question).delete()
-		self._update_answers(question, answers)
+		choices = validated_data.pop('choices', ())
+		with transaction.atomic():
+			question = super().update(instance, validated_data)
+			if choices or QType(question.q_type) is QType.ARBITRARY:
+				models.Choice.objects.filter(question=question).delete()
+			self._update_choices(question, choices)
 		return question
 
-	def _update_answers(self, question, answers):
-		if question.q_type != NO_ANSWERS_TYPE:
-			for answer in answers:
-				models.Answer.objects.create(question=question, **answer)
+	def _update_choices(self, question, choices):
+		if QType(question.q_type) is not QType.ARBITRARY:
+			for choice in choices:
+				models.Choice.objects.create(question=question, **choice)
 
 
 class Poll(ModelSerializer):
@@ -70,3 +80,61 @@ class Poll(ModelSerializer):
 	def update(self, instance, validated_data):
 		validated_data.pop('start_date', None)
 		return super().update(instance, validated_data)
+
+
+class Answer(Serializer):
+	"""User's Choice serializer."""
+
+	user_id = IntegerField()
+	answers = ListSerializer(child=JSONField(), allow_empty=False)
+
+	class Meta:
+		fields = 'user_id', 'answers'
+
+	def validate_user_id(self, value):
+		poll = self.context['poll']
+		if models.Answer.objects.filter(user_id=value, poll=poll).exists():
+			raise ValidationError("You've already answered this poll.")
+		return value
+
+	def validate_answers(self, value):
+		if not value:
+			raise ValidationError("Please, provide some answers.")
+		questions = {q.id: q for q in self.context['poll'].questions.all()}
+		valid_answers = []
+		for raw_answer in value:
+			if not (question := questions.pop(raw_answer.get('question_id'), None)):
+				continue
+			question_type = QType(question.q_type)
+			choice = raw_answer.get('choice')
+			if question_type == QType.ARBITRARY:
+				if not isinstance(choice, str):
+					raise ValidationError(
+						"Answer to question of this type must be a string.")
+			elif not isinstance(choice, int):
+				raise ValidationError(
+					"Answer to question of this type must be an integer id of a choice.")
+			valid_answers.append(raw_answer)
+		if questions:
+			raise ValidationError(
+				f"Please, provide answers to questions: {list(questions)}.")
+		return valid_answers
+
+	def create(self, validated_data):
+		create_object = partial(
+			models.Answer.objects.create,
+			user_id=validated_data['user_id'], poll=self.context['poll']
+		)
+		created = []
+		with transaction.atomic():
+			for answer in validated_data['answers']:
+				choice = answer['choice']
+				if isinstance(choice, str):
+					o = create_object(question_id=answer['question_id'], arbitrary=choice)
+				elif isinstance(choice, int):
+					o = create_object(question_id=answer['question_id'], choice_id=choice)
+				created.append(o)
+		return created
+
+	def to_representation(self, instance):
+		return {'result': f"Answers saved: {len(instance)}."}
