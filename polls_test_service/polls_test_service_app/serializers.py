@@ -111,6 +111,12 @@ class Answer(Serializer):
 			choice = raw_answer.get('choice')
 			question_type = QType(question.q_type)
 
+			if question_type != QType.MANY and question.id in found_answers:
+				raise ValidationError(
+					f"Only single choice allowed for question id {question.id}"
+				)
+			found_answers.add(question.id)
+
 			if question_type == QType.ARBITRARY:
 				if not isinstance(choice, str):
 					raise ValidationError(
@@ -123,12 +129,6 @@ class Answer(Serializer):
 				raise ValidationError(
 					f"Answer to question id {question.id} must be an integer id of a choice."
 				)
-
-			if question_type == QType.SINGLE and choice in found_answers:
-				raise ValidationError(
-					f"Only single choice allowed for question id {question.id}"
-				)
-			found_answers.add(choice)
 
 			try:
 				existing_choice = models.Choice.objects.get(id=choice)

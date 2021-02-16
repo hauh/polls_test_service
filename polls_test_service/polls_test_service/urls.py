@@ -3,7 +3,7 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 from polls_test_service_app.views import (
-	Answer, Poll, PollsList, Question, QuestionsList
+	Answer, Poll, PollsList, Question, QuestionsList, UserAnswers
 )
 
 router = DefaultRouter()
@@ -18,4 +18,5 @@ urlpatterns = router.urls + [
 			path('questions/<pk>/', Question.as_view(), name='question-detail'),
 		]))
 	])),
+	path('users/<int:user_id>/', UserAnswers.as_view(), name='answers-list')
 ]

@@ -23,6 +23,7 @@ class BaseTest(APITestCase):
 	q_list_url = reverse('questions-list', args=(1,))
 	q_url = reverse('question-detail', args=(1, 1))
 	answer_url = reverse('answer-create', args=(1,))
+	list_answers_url = reverse('answers-list', args=(1,))
 
 	poll = {
 		'title': "Test Poll",
@@ -178,17 +179,16 @@ class QuestionsTest(BaseTest):
 class AnswersTest(BaseTest):
 	"""Tests for user's Answers."""
 
-	answer_data = {
-		'user_id': 123,
-		'answers': [
-			{'question_id': 1, 'choice': "arbitrary"},
-			{'question_id': 2, 'choice': 1},
-			{'question_id': 3, 'choice': 4},
-			{'question_id': 3, 'choice': 5},
-		]
-	}
-
 	def setUp(self):
+		self.answer = {
+			'user_id': 1,
+			'answers': [
+				{'question_id': 1, 'choice': "arbitrary"},
+				{'question_id': 2, 'choice': 1},
+				{'question_id': 3, 'choice': 4},
+				{'question_id': 3, 'choice': 5},
+			]
+		}
 		self.request('post', self.polls_url, HTTP_201_CREATED, self.poll)
 		arbitrary_answer_q = {**self.question, 'q_type': 0}
 		self.request('post', self.q_list_url, HTTP_201_CREATED, arbitrary_answer_q)
@@ -197,30 +197,58 @@ class AnswersTest(BaseTest):
 		self.request('post', self.q_list_url, HTTP_201_CREATED, multiple_answers_q)
 
 	def test_create(self):
-		d = self.request('post', self.answer_url, HTTP_201_CREATED, self.answer_data)
+		d = self.request('post', self.answer_url, HTTP_201_CREATED, self.answer)
 		self.assertIn('result', d)
 		self.assertEqual(d['result'], "Answers saved: 4.")
 
 	def test_duplicate_answer(self):
-		self.request('post', self.answer_url, HTTP_201_CREATED, self.answer_data)
-		self.request('post', self.answer_url, HTTP_400_BAD_REQUEST, self.answer_data)
+		self.request('post', self.answer_url, HTTP_201_CREATED, self.answer)
+		self.request('post', self.answer_url, HTTP_400_BAD_REQUEST, self.answer)
 
 	def test_not_enough_answers(self):
-		del self.answer_data['answers'][0]
-		self.request('post', self.answer_url, HTTP_400_BAD_REQUEST, self.answer_data)
+		del self.answer['answers'][0]
+		self.request('post', self.answer_url, HTTP_400_BAD_REQUEST, self.answer)
 
 	def test_not_a_string(self):
-		self.answer_data['answers'][0]['choice'] = 1
-		self.request('post', self.answer_url, HTTP_400_BAD_REQUEST, self.answer_data)
+		self.answer['answers'][0]['choice'] = 1
+		self.request('post', self.answer_url, HTTP_400_BAD_REQUEST, self.answer)
 
 	def test_not_an_int(self):
-		self.answer_data['answers'][1]['choice'] = "must be an id"
-		self.request('post', self.answer_url, HTTP_400_BAD_REQUEST, self.answer_data)
+		self.answer['answers'][1]['choice'] = "must be an id"
+		self.request('post', self.answer_url, HTTP_400_BAD_REQUEST, self.answer)
 
 	def test_multiple_choice(self):
-		self.answer_data['answers'].append({'question_id': 2, 'choice': 2})
-		self.request('post', self.answer_url, HTTP_400_BAD_REQUEST, self.answer_data)
+		self.answer['answers'].append({'question_id': 2, 'choice': 2})
+		self.request('post', self.answer_url, HTTP_400_BAD_REQUEST, self.answer)
 
 	def test_non_existing_choice(self):
-		self.answer_data['answers'].append({'question_id': 3, 'choice': 999})
-		self.request('post', self.answer_url, HTTP_400_BAD_REQUEST, self.answer_data)
+		self.answer['answers'].append({'question_id': 3, 'choice': 999})
+		self.request('post', self.answer_url, HTTP_400_BAD_REQUEST, self.answer)
+
+	def test_user_answers(self):
+		self.request('post', self.answer_url, HTTP_201_CREATED, self.answer)
+		data = self.request('get', self.list_answers_url, HTTP_200_OK)
+		self.assertEqual(len(data), 1)
+		expected = {
+			'id': 1,
+			'title': "Test Poll",
+			'description': "Poll description.",
+			'questions': [
+				{
+					'id': 1,
+					'text': "Test question",
+					'choices': ["arbitrary"]
+				},
+				{
+					'id': 2,
+					'text': "Test question",
+					'choices': ["Choice 1"]
+				},
+				{
+					'id': 3,
+					'text': "Test question",
+					'choices': ["Choice 1", "Choice 2"]
+				},
+			]
+		}
+		self.assertDictEqual(expected, data[0])
