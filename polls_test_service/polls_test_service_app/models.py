@@ -80,4 +80,7 @@ class UserManager(BaseUserManager):
 
 
 class User(AbstractUser):
+	"""Customized user."""
+
 	objects = UserManager()
+	REQUIRED_FIELDS = ('password',)

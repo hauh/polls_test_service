@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+
+  app:
+    build: .
+    image: 'poll_service'
+    container_name: 'poll_service_container'
+    command: >
+      sh -c "
+        python manage.py test &&
+        python manage.py makemigrations ;
+        python manage.py migrate &&
+        python manage.py createsuperuser --from-env ;
+        python manage.py runserver 0.0.0.0:8000
+      "
+    ports:
+      - ${PORT}:8000
+    volumes: 
+      - ./data:/opt/app/data
+    env_file: '.env'
+    restart: always
