@@ -1,0 +1,343 @@
+openapi: '3.0.0'
+info:
+  title: Polls Test Service
+  description: Создание, изменение и прохождение опросов. Сделано в качестве тестового задания.
+  version: '0.1'
+
+components:
+  schemas:
+    Poll:
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        questions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Question'
+    Question:
+      properties:
+        id:
+          type: integer
+        text:
+          type: string
+        q_type:
+          type: integer
+          enum: [0, 1, 2]
+          description: >
+           0: произвольный ответ (строкой),
+           1: один вариант ответа,
+           2: любое количество вараинтов.
+        choices:
+          type: array
+          items:
+            $ref: '#/components/schemas/Choice'
+    Choice:
+      properties:
+        id:
+          type: integer
+        text:
+          type: string
+  securitySchemes:
+    Bearer:
+      type: apiKey
+      name: Authorization
+      in: header
+
+security:
+  - Bearer: []
+
+paths:
+  /polls/:
+    get:
+      summary: Список опросов
+      description: >
+        Возвращает список незавершённых опросов (для администратора — всех).
+      security: []
+      responses:
+        '200':
+          description: A JSON array of user names
+          content:
+            application/json:
+              schema: 
+                type: array
+                items:
+                  $ref: '#/components/schemas/Poll'
+    post:
+      summary: Создать опрос
+      description: Заголовок, описание, тип (0, 1, 2).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              properties:
+                title:
+                  type: string
+                description:
+                  type: string
+                q_type:
+                  type: integer
+                  enum: [0, 1, 2]
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: 
+                  $ref: '#/components/schemas/Poll'
+  /polls/{poll_id}/:
+    get:
+      summary: Опрос
+      description: Возвращает опрос по poll_id из адреса.
+      security: []
+      parameters:
+        - in: path
+          name: poll_id
+          schema:
+            type: integer
+          required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Poll'
+    patch:
+      summary: Редактировать опрос
+      description: >
+        Изменяемые поля: title, description, q_type, end_date (> start_date).
+      parameters:
+        - in: path
+          name: poll_id
+          schema:
+            type: integer
+          required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Poll'
+    delete:
+      summary: Удалить опрос
+      parameters:
+        - in: path
+          name: poll_id
+          schema:
+            type: integer
+          required: true
+      responses:
+        '204':
+          description: No Content
+  /polls/{poll_id}/questions/:
+    get:
+      summary: Список вопросов для опроса
+      security: []
+      parameters:
+        - in: path
+          name: poll_id
+          schema:
+            type: integer
+          required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Poll'
+    post:
+      summary: Создать вопрос
+      description: Добавить вопрос для опроса с массивом ответов.
+      parameters:
+        - in: path
+          name: poll_id
+          schema:
+            type: integer
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              properties:
+                text:
+                  type: string
+                q_type:
+                  type: integer
+                  enum: [0, 1, 2]
+                choices:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      text:
+                        type: string
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Question'
+  /polls/{poll_id}/questions/{question_id}/:
+    get:
+      summary: Вопрос для опроса
+      security: []
+      parameters:
+        - in: path
+          name: poll_id
+          schema:
+            type: integer
+          required: true
+        - in: path
+          name: question_id
+          schema:
+            type: integer
+          required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Question'
+    patch:
+      summary: Редактировать вопрос
+      parameters:
+        - in: path
+          name: poll_id
+          schema:
+            type: integer
+          required: true
+        - in: path
+          name: question_id
+          schema:
+            type: integer
+          required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Question'
+    delete:
+      summary: Удалить вопрос
+      parameters:
+        - in: path
+          name: poll_id
+          schema:
+            type: integer
+          required: true
+        - in: path
+          name: question_id
+          schema:
+            type: integer
+          required: true
+      responses:
+        '204':
+          description: No Content
+  /polls/{poll_id}/answer/:
+    post:
+      summary: Пройти опрос
+      security: []
+      description: >
+        Массив ответов на вопросы для опроса. На все вопросы должны быть ответы.
+        Для вопросов с типом 0 должна быть строка, для типов 1 и 2 — id ответа.
+        Для типа 2 ответов может быть несколько.
+        Пройти можно только один раз.
+      parameters:
+          - in: path
+            name: poll_id
+            schema:
+              type: integer
+            required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              properties:
+                user_id:
+                  type: integer
+                answers:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      question_id:
+                        type: integer
+                      choice:
+                        oneOf:
+                        - type: string
+                        - type: integer
+      responses:
+        '201':
+          description: Опрос пройден
+          content:
+            application/json:
+              schema:
+                properties:
+                  result:
+                    type: string
+  /users/login/:
+    post:
+      summary: Авторизация
+      description: >
+        Возвращает токен для хедера ('Authorization': 'Token <token>').
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Authorized
+          content:
+            application/json:
+              schema:
+                properties:
+                  token:
+                    type: string
+  /users/{user_id}/answers/:
+    get:
+      summary: Список пройденных опросов пользователя
+      security: []
+      parameters:
+        - in: path
+          name: user_id
+          schema:
+            type: integer
+          required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Poll'

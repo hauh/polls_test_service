@@ -20,7 +20,7 @@ urlpatterns = router.urls + [
 		]))
 	])),
 	path('users/', include([
-		path('<int:user_id>/', UserAnswers.as_view(), name='answers-list'),
+		path('<int:user_id>/answers/', UserAnswers.as_view(), name='answers-list'),
 		path('login/', obtain_auth_token, name='login'),
 	]))
 ]
